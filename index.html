@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHROMA SIGNAL — 特定の色だけ残す画像加工ツール</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div>
+    <h1>CHROMA SIGNAL</h1>
+    <p class="sub">特定の色だけ残す画像加工ツール</p>
+  </div>
+</header>
+
+<main>
+  <section class="panel left">
+    <label class="filebtn">
+      画像を開く
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </label>
+
+    <div class="thumb-wrap">
+      <p class="label">元画像</p>
+      <canvas id="thumbCanvas" class="thumb"></canvas>
+    </div>
+
+    <div class="tool-block">
+      <p class="label">キャンバスツール</p>
+      <div class="tool-grid" id="toolButtons">
+        <button class="tool active" data-mode="eyedropper">スポイト</button>
+        <button class="tool" data-mode="add-region">矩形を追加</button>
+        <button class="tool" data-mode="delete-region">矩形を削除</button>
+      </div>
+      <p id="toolHelp" class="hint">画像をクリックすると、周辺5×5ピクセルの平均色を取得します。</p>
+    </div>
+  </section>
+
+  <section class="panel center">
+    <div id="canvasStack" class="canvas-stack">
+      <canvas id="mainCanvas"></canvas>
+      <canvas id="overlayCanvas" aria-label="領域選択操作レイヤー"></canvas>
+    </div>
+    <p id="status" class="status">画像を開いてください。</p>
+  </section>
+
+  <section class="panel right">
+    <h2>残す色</h2>
+    <p class="section-note">最大3色。色ごとにΔEと適用領域を設定できます。</p>
+    <div id="slots" class="slots"></div>
+
+    <details class="control-group" open>
+      <summary>カラーピッカー</summary>
+      <div class="native-picker-wrap">
+        <input type="color" id="nativeColor" value="#ff0000" aria-label="色を選択">
+        <span>クリックして色を選択</span>
+      </div>
+      <div class="rgbrow">
+        <label>R<input type="number" id="rIn" min="0" max="255" value="255"></label>
+        <label>G<input type="number" id="gIn" min="0" max="255" value="0"></label>
+        <label>B<input type="number" id="bIn" min="0" max="255" value="0"></label>
+        <button id="applyPicker">選択スロットへ反映</button>
+      </div>
+    </details>
+
+    <details class="control-group" open>
+      <summary>仕上げ</summary>
+      <label class="slider">色フェザー <span id="featherVal">10</span>
+        <input type="range" id="feather" min="0" max="40" value="10">
+      </label>
+      <div class="signature-settings">
+        <label><input type="checkbox" id="showPalette" checked> 左下にカラーシグネチャ</label>
+        <label class="signature-option">カラー表示
+          <select id="paletteStyle">
+            <option value="hex" selected>色＋HEXコード</option>
+            <option value="chips">色のみ</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="showBrand" checked> 右下にツール名</label>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button id="resetBtn">リセット</button>
+      <button id="saveBtn" class="primary">PNGで保存</button>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
