@@ -41,7 +41,7 @@ function drawPalette(ctx,colors,W,H,margin,base,pad,family,paletteStyle){
   if(!colors.length)return;
   const visible=colors.slice(0,3);
   const showHex=paletteStyle!=="chips";
-  const title=showHex?"SELECTED CHROMA":"CHROMA SIGNALS";
+  const title=showHex?"SELECTED COLORS":"COLORS";
   const titleFont=`600 ${base*.62}px ${family}`;
   const valueFont=`650 ${base*.72}px ${family}`;
   const gap=base*.58, chip=base*.9, chipTextGap=base*.36;
@@ -104,7 +104,7 @@ function drawPalette(ctx,colors,W,H,margin,base,pad,family,paletteStyle){
 
 function drawBrand(ctx,W,H,margin,base,pad,family){
   const compact=W<800;
-  const upper=compact?"":"ACCENTED WITH";
+  const upper=compact?"":"MADE WITH";
   const brand="CHROMA SIGNAL";
   ctx.letterSpacing="0px";
   ctx.font=`750 ${base}px ${family}`;
