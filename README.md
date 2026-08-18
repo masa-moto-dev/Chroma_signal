@@ -14,11 +14,6 @@ python3 -m http.server 8000
 
 ブラウザで `http://localhost:8000` を開きます。
 
-## GitHub Pages
-
-1. このフォルダーの中身をGitHubリポジトリへpushします。
-2. `index.html`が公開対象のルートに来るよう配置します。
-3. Settings → Pagesで、mainブランチのrootを公開元に指定します。
 
 ## 主な機能
 
