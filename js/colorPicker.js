@@ -12,6 +12,7 @@ export function sample5x5(canvas, cx, cy){
 }
 
 import { rgbToLab } from "./colorSpace.js";
+import { pointInPolygon } from "./regionSelection.js";
 
 // 各スロットは色・独立ΔE・適用範囲・複数矩形を持つ
 export class SlotStore {
@@ -31,23 +32,39 @@ export class SlotStore {
   }
   setThreshold(idx, t){ if(this.slots[idx]) this.slots[idx].threshold = t; }
   setScope(idx, scope){ if(this.slots[idx]) this.slots[idx].scope = scope; }
-  addRegion(idx, rect){
+  addRegion(idx, region){
     if(!this.slots[idx]) return false;
-    this.slots[idx].regions.push(rect);
+    this.slots[idx].regions.push(region);
     this.slots[idx].scope = "regions";
     return true;
   }
   clearRegions(idx){ if(this.slots[idx]) this.slots[idx].regions = []; }
-  deleteRegionAt(idx, x, y){
+  deleteRegionAt(idx, x, y) {
     const slot = this.slots[idx];
-    if(!slot) return false;
-    for(let i=slot.regions.length-1;i>=0;i--){
-      const r=slot.regions[i];
-      if(x>=r.x && x<=r.x+r.width && y>=r.y && y<=r.y+r.height){
-        slot.regions.splice(i,1);
+    if (!slot) return false;
+
+    // 後から追加した領域から調べる
+    for (let i = slot.regions.length - 1; i >= 0; i--) {
+      const r = slot.regions[i];
+      let hit = false;
+
+      if (r.type === "polygon") {
+        hit = pointInPolygon(x, y, r.points);
+
+      } else if (!r.type || r.type === "rect") {
+        hit =
+          x >= r.x &&
+          x <= r.x + r.width &&
+          y >= r.y &&
+          y <= r.y + r.height;
+      }
+
+      if (hit) {
+        slot.regions.splice(i, 1);
         return true;
       }
     }
+
     return false;
   }
   remove(idx){ this.slots[idx] = null; }
