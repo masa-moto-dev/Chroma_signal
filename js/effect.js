@@ -1,5 +1,6 @@
 // 指定色に近く、かつ各スロットの適用領域内にあるピクセルだけ色を残す
 import { rgbToLab, deltaE76, luma } from "./colorSpace.js";
+import { pointInPolygon } from "./regionSelection.js";
 
 export function applyEffect(srcCanvas, destCanvas, colors, feather){
   const w=srcCanvas.width, h=srcCanvas.height;
@@ -17,13 +18,26 @@ export function applyEffect(srcCanvas, destCanvas, colors, feather){
   const img=sctx.getImageData(0,0,w,h);
   const d=img.data;
 
-  const cols=colors.map(c=>({
-    lab:c.lab || rgbToLab(c.r,c.g,c.b),
-    th:c.threshold,
-    scope:c.scope || "global",
-    regions:(c.regions||[]).map(r=>({
-      x0:r.x*w, y0:r.y*h, x1:(r.x+r.width)*w, y1:(r.y+r.height)*h
-    }))
+  const cols = colors.map(c => ({
+    lab: c.lab || rgbToLab(c.r, c.g, c.b),
+    th: c.threshold,
+    scope: c.scope || "global",
+    regions: (c.regions || []).map(r => {
+      if (r.type === "polygon") {
+        return {
+          type: "polygon",
+          points: r.points.map(([x, y]) => [x * w, y * h])
+        };
+      }
+
+      return {
+        type: "rect",
+        x0: r.x * w,
+        y0: r.y * h,
+        x1: (r.x + r.width) * w,
+        y1: (r.y + r.height) * h
+      };
+    })
   }));
 
   for(let p=0,i=0;i<d.length;i+=4,p++){
@@ -38,7 +52,14 @@ export function applyEffect(srcCanvas, destCanvas, colors, feather){
       if(!inScope){
         for(let q=0;q<c.regions.length;q++){
           const rg=c.regions[q];
-          if(x>=rg.x0 && x<=rg.x1 && y>=rg.y0 && y<=rg.y1){ inScope=true; break; }
+          const hit = rg.type === "polygon"
+          ? pointInPolygon(x + 0.5, y + 0.5, rg.points)
+          : x >= rg.x0 && x <= rg.x1 && y >= rg.y0 && y <= rg.y1;
+
+          if (hit) {
+            inScope = true;
+            break;
+          }
         }
       }
       if(!inScope) continue;
