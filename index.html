@@ -32,7 +32,8 @@
       <div class="tool-grid" id="toolButtons">
         <button class="tool active" data-mode="eyedropper">スポイト</button>
         <button class="tool" data-mode="add-region">矩形を追加</button>
-        <button class="tool" data-mode="delete-region">矩形を削除</button>
+        <button class="tool" data-mode="add-poly">多角形を追加</button>
+        <button class="tool" data-mode="delete-region">領域を削除</button>
       </div>
       <p id="toolHelp" class="hint">画像をクリックすると、周辺5×5の平均色を取得します。</p>
     </div>
@@ -71,14 +72,14 @@
         <input type="range" id="feather" min="0" max="40" value="10">
       </label>
       <div class="signature-settings">
-        <label><input type="checkbox" id="showPalette" checked> 左下にカラーシグネチャ</label>
+        <label><input type="checkbox" id="showPalette" unchecked> 左下にカラーシグネチャ</label>
         <label class="signature-option">カラー表示
           <select id="paletteStyle">
             <option value="hex" selected>色＋HEXコード</option>
             <option value="chips">色のみ</option>
           </select>
         </label>
-        <label><input type="checkbox" id="showBrand" checked> 右下に「CHROMA SIGNAL」を表示</label>
+        <label><input type="checkbox" id="showBrand" unchecked> 右下に「CHROMA SIGNAL」を表示</label>
       </div>
     </details>
 
