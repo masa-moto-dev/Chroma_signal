@@ -21,6 +21,20 @@ let origCanvas=null,showCanvas=null,editCanvas=null;
 const workCanvas=document.createElement("canvas");
 const store=new SlotStore(3);
 let toolMode="eyedropper",dragStart=null,draftRect=null;
+let polyDraft=null;
+// Canvasでキー操作を受け取れるようにする
+els.overlay.tabIndex = 0;
+
+function clearDraft() {
+  dragStart = null;
+  draftRect = null;
+  polyDraft = null;
+}
+
+function selectSlot(idx) {
+  if (idx !== store.active) clearDraft();
+  store.setActive(idx);
+}
 
 function rgbToHex(r,g,b){
   return "#"+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,"0")).join("");
@@ -48,7 +62,14 @@ function syncOverlay(){
 function redrawOverlay(){
   if(toolMode==="eyedropper"){
     els.overlay.getContext("2d").clearRect(0,0,els.overlay.width,els.overlay.height);
-  }else drawRegions(els.overlay,store.slots,store.active,draftRect);
+  }else {
+    const draft = toolMode === "add-region"
+    ? draftRect
+    : toolMode==="add-poly"
+      ? polyDraft
+      :null;
+    drawRegions(els.overlay,store.slots,store.active, draft);
+  }
 }
 
 function render(quality="show"){
@@ -71,7 +92,7 @@ function renderSlots(){
     div.style.setProperty("--slot-color",SLOT_UI_COLORS[idx]);
     if(!s){
       div.innerHTML=`<div>スロット${idx+1}（空）<br>クリックして選択</div>`;
-      div.onclick=()=>{store.setActive(idx);renderSlots();redrawOverlay();};
+      div.onclick=()=>{selectSlot(idx);;renderSlots();redrawOverlay();};
     }else{
       const hx="#"+[s.r,s.g,s.b].map(v=>v.toString(16).padStart(2,"0")).join("").toUpperCase();
       div.innerHTML=`
@@ -95,13 +116,16 @@ function renderSlots(){
 
       div.querySelector(".top").onclick=e=>{
         if(e.target.closest(".rm"))return;
-        store.setActive(idx);els.nativeColor.value=rgbToHex(s.r,s.g,s.b);renderSlots();redrawOverlay();
+        selectSlot(idx);;els.nativeColor.value=rgbToHex(s.r,s.g,s.b);renderSlots();redrawOverlay();
       };
+      if (idx === store.active) clearDraft();
       div.querySelector(".rm").onclick=()=>{store.remove(idx);renderSlots();render("show");};
       const range=div.querySelector(".threshold"),value=div.querySelector(".thr span");
       range.oninput=()=>{value.textContent=range.value;store.setThreshold(idx,+range.value);render("edit");};
       range.onchange=scheduleShow;
+      if (idx === store.active) clearDraft();
       div.querySelector(".scope").onchange=e=>{store.setScope(idx,e.target.value);render("show");renderSlots();};
+      if (idx === store.active) clearDraft();
       div.querySelector(".clear-regions").onclick=()=>{store.clearRegions(idx);renderSlots();render("show");};
     }
     els.slots.appendChild(div);
@@ -116,15 +140,25 @@ function assignColor(r,g,b){
 }
 
 function setTool(mode){
-  toolMode=mode;dragStart=null;draftRect=null;
+  toolMode=mode;
+  clearDraft();
+
+  
   els.toolButtons.querySelectorAll(".tool").forEach(b=>b.classList.toggle("active",b.dataset.mode===mode));
   const help={
-    eyedropper:"画像をクリックすると、周辺5×5の平均色を取得します。",
+    "eyedropper":"画像をクリックすると、周辺5×5の平均色を取得します。",
     "add-region":"選択中の色スロットに対して、残したい範囲をドラッグしてください。",
+    "add-poly":"マウスクリックで多角形領域を指定してください",
     "delete-region":"選択中の色スロットから、削除したい矩形をクリックしてください。"
   };
   els.toolHelp.textContent=help[mode];
-  els.overlay.style.cursor=mode==="add-region"?"crosshair":mode==="delete-region"?"not-allowed":"copy";
+  els.overlay.style.cursor = 
+      (mode==="add-region"||mode==="add-poly") 
+        ?"crosshair"
+        :mode==="delete-region" 
+          ?"not-allowed" 
+          :"copy";
+  
   redrawOverlay();
 }
 els.toolButtons.addEventListener("click",e=>{const b=e.target.closest("[data-mode]");if(b)setTool(b.dataset.mode);});
@@ -133,7 +167,7 @@ els.file.addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
     setStatus("読み込み中...");
-    origCanvas=await loadImageFile(f);
+    clearDraft();origCanvas=await loadImageFile(f);
     showCanvas=downscale(origCanvas,PREVIEW_SHOW);
     editCanvas=downscale(origCanvas,PREVIEW_EDIT);
     drawThumb(els.thumb,origCanvas);render("show");
@@ -142,7 +176,9 @@ els.file.addEventListener("change",async e=>{
 });
 
 els.overlay.addEventListener("pointerdown",e=>{
-  if(!showCanvas)return;
+  if (!showCanvas || e.button !== 0 || e.isPrimary === false) return;
+  els.overlay.focus({ preventScroll: true });
+
   const p=pointerToNormalized(els.overlay,e);
   if(toolMode==="eyedropper"){
     const x=Math.round(p.x*(showCanvas.width-1)),y=Math.round(p.y*(showCanvas.height-1));
@@ -156,14 +192,104 @@ els.overlay.addEventListener("pointerdown",e=>{
     else setStatus("クリック位置に、選択スロットの矩形はありません。");
     return;
   }
+  if (toolMode === "add-poly") {
+    if (!polyDraft) {
+      polyDraft = {
+        type: "polygon",
+        points: [],
+        mouse: null
+      };
+    }
+
+    // 画面上の距離で判定する
+    const bounds = els.overlay.getBoundingClientRect();
+
+    const distanceTo = ([x, y]) => Math.hypot(
+      (p.x - x) * bounds.width,
+      (p.y - y) * bounds.height
+    );
+
+    // 3点以上あり、始点付近をクリックしたら確定
+    if (
+      polyDraft.points.length >= 3 &&
+      distanceTo(polyDraft.points[0]) <= 12
+    ) {
+      finishPolygon();
+      return;
+    }
+
+    // 同じ場所を続けてクリックした場合は追加しない
+    const last = polyDraft.points[polyDraft.points.length - 1];
+    if (last && distanceTo(last) < 2) return;
+
+    polyDraft.points.push([p.x, p.y]);
+    polyDraft.mouse = null;
+
+    redrawOverlay();
+    setStatus(
+      `頂点${polyDraft.points.length}個。始点クリックかEnterで確定できます。`
+    );
+    return;
+  }
+
+  if (toolMode !== "add-region") return;
   dragStart=p;draftRect={x:p.x,y:p.y,width:0,height:0};
   els.overlay.setPointerCapture(e.pointerId);redrawOverlay();
 });
 
-els.overlay.addEventListener("pointermove",e=>{
-  if(toolMode!=="add-region"||!dragStart)return;
-  const p=pointerToNormalized(els.overlay,e);
-  draftRect=normalizeRect(dragStart.x,dragStart.y,p.x,p.y);redrawOverlay();
+els.overlay.addEventListener("pointermove", e => {
+  if (toolMode === "add-poly" && polyDraft) {
+    polyDraft.mouse = pointerToNormalized(els.overlay, e);
+    redrawOverlay();
+    return;
+  }
+
+  if (toolMode !== "add-region" || !dragStart) return;
+
+  const p = pointerToNormalized(els.overlay, e);
+
+  draftRect = normalizeRect(
+    dragStart.x, dragStart.y, p.x, p.y
+  );
+
+  redrawOverlay();
+});
+els.overlay.addEventListener("pointerleave", () => {
+  if (polyDraft) {
+    polyDraft.mouse = null;
+    redrawOverlay();
+  }
+});
+
+els.overlay.addEventListener("keydown", e => {
+  if (
+    toolMode !== "add-poly" ||
+    !polyDraft ||
+    e.ctrlKey || e.metaKey || e.altKey
+  ) return;
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    finishPolygon();
+
+  } else if (e.key === "Backspace" || e.key === "Delete") {
+    e.preventDefault();
+
+    polyDraft.points.pop();
+    polyDraft.mouse = null;
+
+    if (polyDraft.points.length === 0) polyDraft = null;
+
+    redrawOverlay();
+    setStatus("最後の頂点を取り消しました。");
+
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+
+    clearDraft();
+    redrawOverlay();
+    setStatus("多角形の作成を中止しました。");
+  }
 });
 
 function finishRegion(e){
@@ -176,12 +302,54 @@ function finishRegion(e){
     setStatus(`スロット${store.active+1}に矩形領域を追加しました。`);
   }else redrawOverlay();
 }
+
+function finishPolygon() {
+  if (
+    toolMode !== "add-poly" ||
+    !polyDraft ||
+    polyDraft.points.length < 3
+  ) return;
+
+  if (!store.slots[store.active]) return;
+
+  // 下書きから独立した頂点列を保存する
+  const points = polyDraft.points.map(([x, y]) => [x, y]);
+
+  let twiceArea = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const [x0, y0] = points[i];
+    const [x1, y1] = points[(i + 1) % points.length];
+
+    twiceArea += x0 * y1 - x1 * y0;
+  }
+
+  if (Math.abs(twiceArea) < 1e-10) {
+    setStatus("一直線にならないよう、3点以上の頂点を指定してください。");
+    return;
+  }
+
+  store.addRegion(store.active, {
+    type: "polygon",
+    points
+  });
+
+  polyDraft = null;
+  renderSlots();
+  render("show");
+
+  setStatus(`スロット${store.active + 1}に多角形領域を追加しました。`);
+}
+
 els.overlay.addEventListener("pointerup",finishRegion);
-els.overlay.addEventListener("pointercancel",()=>{dragStart=null;draftRect=null;redrawOverlay();});
+els.overlay.addEventListener("pointercancel", () => {
+  clearDraft();
+  redrawOverlay();
+});
 
 els.applyPicker.addEventListener("click",()=>{
   const clamp=v=>Math.max(0,Math.min(255,Number.isFinite(v)?v:0));
-  assignColor(clamp(+els.rIn.value|0),clamp(+els.gIn.value|0),clamp(+els.bIn.value|0));
+  clearDraft();assignColor(clamp(+els.rIn.value|0),clamp(+els.gIn.value|0),clamp(+els.bIn.value|0));
 });
 els.feather.addEventListener("input",()=>{els.featherVal.textContent=els.feather.value;render("edit");});
 els.feather.addEventListener("change",scheduleShow);
@@ -201,7 +369,7 @@ els.save.addEventListener("click",()=>{
   },20);
 });
 els.reset.addEventListener("click",()=>{
-  store.reset();els.feather.value=10;els.featherVal.textContent="10";
+  clearDraft();store.reset();els.feather.value=10;els.featherVal.textContent="10";
   els.showPalette.checked=true;els.paletteStyle.value="hex";els.paletteStyle.disabled=false;els.showBrand.checked=true;
   renderSlots();render("show");setTool("eyedropper");
 });
